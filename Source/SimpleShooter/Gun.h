@@ -14,17 +14,16 @@ class SIMPLESHOOTER_API AGun : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AGun();
+	
+	void BeginShoot();
+	void EndShoot();
 
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
+	UFUNCTION()
 	void PullTrigger();
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-
-private:
 
 	UPROPERTY(VisibleAnywhere)
 	USceneComponent* Root;
@@ -42,16 +41,30 @@ private:
 	UPROPERTY(EditAnywhere)
 	USoundBase* ImpactSound;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gun")
 	float mMaxRange = 1000.f;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gun")
 	float mDamage = 10.f;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gun")
 	int mHeadshotDamageMultiplier = 3;
+
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Gun")
+	float mTimeBetweenShots;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gun")
+	float mShootingRPM;
+
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Gun")
+	float mTimeOfLastShot;
+
+	FTimerHandle mTimerHandle_ShootingTimer;
 
 	bool GunTrace(FHitResult& Hit, FVector& ShotDirection);
 
 	AController* GetOwnerContoller() const;
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_PullTrigger();
 };

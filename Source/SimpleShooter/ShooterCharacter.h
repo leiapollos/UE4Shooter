@@ -7,6 +7,7 @@
 #include "ShooterCharacter.generated.h"
 
 class AGun;
+class UHealthComponent;
 
 UCLASS()
 class SIMPLESHOOTER_API AShooterCharacter : public ACharacter
@@ -22,8 +23,6 @@ public:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
-	virtual float TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 	
 	void Shoot();
 
@@ -33,33 +32,25 @@ public:
 	UFUNCTION(BlueprintPure)
 	float GetHealthPercent() const;
 
+	UFUNCTION()
+	void OnHealthChanged(UHealthComponent* HealthComp, float Health, float HealthDelta, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser);
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-private:
-
 	UPROPERTY(EditAnywhere)
 	float mRotationRateX = 10.f;
 	UPROPERTY(EditAnywhere)
 	float mRotationRateY = 10.f;
-
-	UPROPERTY(EditDefaultsOnly)
-	float mMaxHealth = 100.f; 
-	UPROPERTY(EditDefaultsOnly)
-	float mHealth;
-
+	
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<AGun> GunClass;
 
-	UPROPERTY()
+	UPROPERTY(Replicated)
 	AGun* mGun;
 
-	bool mIsShooting = false;
-	UPROPERTY(EditAnywhere)
-	float mShootingCooldown = 0.15f;
-	float mShootingTimer;
+	UHealthComponent* mHealthComp;
 
 	void StartShooting();
 	void EndShooting();

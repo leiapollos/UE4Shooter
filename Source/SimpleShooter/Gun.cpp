@@ -3,8 +3,11 @@
 
 #include "Gun.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Kismet/GameplayStatics.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Kismet/GameplayStatics.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
+#include "SimpleShooter.h"
 
 #define OUT
 
@@ -12,31 +15,47 @@
 AGun::AGun()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
 	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(Root);
+
+	mShootingRPM = 600.f;
+
+	bReplicates = true;
 }
 
 // Called when the game starts or when spawned
 void AGun::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	mTimeBetweenShots = 60 / mShootingRPM;
+	mTimeOfLastShot = 0;
 }
 
-// Called every frame
-void AGun::Tick(float DeltaTime)
+void AGun::BeginShoot()
 {
-	Super::Tick(DeltaTime);
+	float delay = mTimeOfLastShot + mTimeBetweenShots - GetWorld()->TimeSeconds;
+	delay = FMath::Clamp(delay, 0.f, mTimeBetweenShots);
+	GetWorldTimerManager().SetTimer(mTimerHandle_ShootingTimer, this, &AGun::PullTrigger, mTimeBetweenShots, true, delay);
+}
 
+void AGun::EndShoot()
+{
+	GetWorld()->GetTimerManager().ClearTimer(mTimerHandle_ShootingTimer);
 }
 
 void AGun::PullTrigger()
 {
+	if (GetLocalRole() < ROLE_Authority)
+	{
+		Server_PullTrigger();
+	}
+
 	UGameplayStatics::SpawnEmitterAttached(MuzzleFlash,Mesh,TEXT("MuzzleFlashSocket"));
 	UGameplayStatics::SpawnSoundAttached(MuzzleSound, Mesh, TEXT("MuzzleFlashSocket"));
 
@@ -54,15 +73,35 @@ void AGun::PullTrigger()
 		if (HitActor != nullptr)
 		{
 			float DamageToApply = mDamage;
-			if (!Hit.BoneName.Compare("head"))
+
+			EPhysicalSurface SurfaceTypeForHit = UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get());
+			switch (SurfaceTypeForHit)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("bone: %s"), *Hit.BoneName.ToString());
+			case SURFACE_TYPE_FLESH_DEFAULT:
+				break;
+			case SURFACE_TYPE_FLESH_VULNERABLE:
 				DamageToApply *= mHeadshotDamageMultiplier;
+				break;
+			default:
+				break;
 			}
+
 			FPointDamageEvent DamageEvent(DamageToApply, Hit, ShotDirection, nullptr);
 			HitActor->TakeDamage(DamageToApply, DamageEvent, OwnerController, this);
 		}
+
+		mTimeOfLastShot = GetWorld()->TimeSeconds;
 	}
+}
+
+void AGun::Server_PullTrigger_Implementation()
+{
+	PullTrigger();
+}
+
+bool AGun::Server_PullTrigger_Validate()
+{
+	return true;
 }
 
 bool AGun::GunTrace(FHitResult& Hit, FVector& ShotDirection)
@@ -79,6 +118,7 @@ bool AGun::GunTrace(FHitResult& Hit, FVector& ShotDirection)
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
 	Params.AddIgnoredActor(GetOwner());
+	Params.bReturnPhysicalMaterial = true;
 
 	return GetWorld()->LineTraceSingleByChannel(OUT Hit, ViewPointLocation, EndPoint, ECC_GameTraceChannel1, Params);
 }
